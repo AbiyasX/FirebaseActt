@@ -1,90 +1,165 @@
-import { useState } from 'react'
-import { signInWithEmailAndPassword } from 'firebase/auth'
-import { auth } from '../firebase/config'
-import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { getDoc, doc, updateDoc } from 'firebase/firestore'
+import { db } from '../firebase/config'
 import './create.css'
 
-export default function Login({ onLogin }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+export default function UpdateArticle() {
+  const [title, setTitle] = useState('')
+  const [author, setAuthor] = useState('')
+  const [description, setDescription] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [updating, setUpdating] = useState(false)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  
+  const navigate = useNavigate()
+  const { urlId } = useParams()
 
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+  useEffect(() => {
+    loadArticle()
+  }, [urlId])
 
+  const loadArticle = async () => {
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password)
-      onLogin({
-        id: result.user.uid,
-        email: result.user.email,
-        username: result.user.email.split('@')[0]
-      })
-    } catch (err) {
-      if (err.code === 'auth/user-not-found') {
-        setError('No account found with this email')
-      } else if (err.code === 'auth/wrong-password') {
-        setError('Wrong password')
+      const ref = doc(db, 'articles', urlId)
+      const snapshot = await getDoc(ref)
+      
+      if (snapshot.exists()) {
+        const articleData = snapshot.data()
+        setTitle(articleData.title || '')
+        setAuthor(articleData.author || '')
+        setDescription(articleData.description || '')
       } else {
-        setError('Login failed. Try again.')
+        setError('Article not found!')
+        setTimeout(() => navigate('/'), 2000)
       }
+    } catch (err) {
+      console.error('Error loading article:', err)
+      setError('Error loading article data')
     }
+    
     setLoading(false)
   }
 
-  return (
-    <div className="create">
-      <h2 className="page-title">Login</h2>
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setUpdating(true)
+    setError('')
+    
+    try {
+      const articleRef = doc(db, 'articles', urlId)
+      const updatedArticle = {
+        title,
+        author,
+        description,
+        updatedAt: new Date()
+      }
       
-      {error && (
+      await updateDoc(articleRef, updatedArticle)
+      
+      navigate(`/articles/${urlId}`)
+    } catch (err) {
+      console.error('Error updating article:', err)
+      setError('Error updating article. Please try again.')
+    }
+    
+    setUpdating(false)
+  }
+
+  const handleCancel = () => {
+    navigate(`/articles/${urlId}`)
+  }
+
+  if (loading) {
+    return (
+      <div className="create">
+        <p>Loading article data...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="create">
         <div style={{
           color: 'red',
           background: '#ffe6e6',
           padding: '10px',
-          borderRadius: '4px',
-          marginBottom: '20px'
+          borderRadius: '4px'
         }}>
           {error}
         </div>
-      )}
+      </div>
+    )
+  }
 
-      <form onSubmit={handleLogin}>
-        <label style={{ textAlign: 'center' }}>
-          <span>Email:</span>
+  return (
+    <div className="create">
+      <h2 className="page-title">Update Article</h2>
+      
+      <form onSubmit={handleSubmit}>
+        <label>
+          <span>Title:</span>
           <input 
-            type="email" 
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text" 
+            onChange={(e) => setTitle(e.target.value)}
+            value={title}
             required
-            placeholder="your@email.com"
           />
         </label>
         
-        <label style={{ textAlign: 'center' }}>
-          <span>Password:</span>
+        <label>
+          <span>Author:</span>
           <input 
-            type="password" 
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            type="text" 
+            onChange={(e) => setAuthor(e.target.value)}
+            value={author}
             required
-            placeholder="Your password"
           />
         </label>
 
-        <button 
-          className="btn" 
-          disabled={loading}
-          style={{
-            backgroundColor: '#007bff',
-            borderColor: '#007bff',
-            margin: '20px auto',
-            display: 'block'
-          }}
-        >
-          {loading ? 'Please wait...' : 'Login'}
-        </button>
+        <label>
+          <span>Description:</span>
+          <textarea 
+            onChange={(e) => setDescription(e.target.value)}
+            value={description}
+            required
+            rows="6"
+          />
+        </label>
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            className="btn" 
+            type="submit" 
+            disabled={updating}
+            style={{
+              backgroundColor: updating ? '#ccc' : '#58249c'
+            }}
+          >
+            {updating ? 'Updating...' : 'Update Article'}
+          </button>
+          
+          <button 
+            type="button"
+            onClick={handleCancel}
+            style={{
+              display: 'block',
+              width: '100px',
+              fontSize: '1em',
+              color: '#666',
+              padding: '8px 20px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              backgroundColor: '#f0f0f0',
+              cursor: 'pointer',
+              textDecoration: 'none',
+              margin: '20px 0'
+            }}
+          >
+            Cancel
+          </button>
+        </div>
       </form>
     </div>
   )
